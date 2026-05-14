@@ -35,6 +35,9 @@ public class KeycloakService {
     @Value("${keycloak.url}")
     private String keycloakUrl;
 
+    @Value("${keycloak.public-url}")
+    private String keycloakPublicUrl;
+
     @Value("${keycloak.realm}")
     private String realm;
 
@@ -70,7 +73,7 @@ public class KeycloakService {
         pendingPkce.put(state, new PkceEntry(codeVerifier, Instant.now()));
         cleanStalePkceEntries();
 
-        String baseUrl = keycloakUrl + "/realms/" + realm + "/protocol/openid-connect/auth";
+        String baseUrl = keycloakPublicUrl + "/realms/" + realm + "/protocol/openid-connect/auth";
         return baseUrl
                 + "?client_id=" + encode(clientId)
                 + "&response_type=code"

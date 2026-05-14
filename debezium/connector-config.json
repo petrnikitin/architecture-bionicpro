@@ -8,7 +8,7 @@
     "database.user":     "crm_user",
     "database.password": "crm_password",
     "database.dbname":   "crm_db",
-    "database.server.name": "bionicpro",
+    "topic.prefix": "bionicpro",
 
     "plugin.name":        "pgoutput",
     "slot.name":          "debezium_slot",

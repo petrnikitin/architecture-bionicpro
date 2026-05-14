@@ -3,6 +3,7 @@ server:
 
 keycloak:
   url: ${KEYCLOAK_URL:http://keycloak:8080}
+  public-url: ${KEYCLOAK_PUBLIC_URL:http://localhost:8080}
   realm: ${KEYCLOAK_REALM:reports-realm}
   client-id: ${KEYCLOAK_CLIENT_ID:bionicpro-auth-client}
   client-secret: ${KEYCLOAK_CLIENT_SECRET:bionicpro-auth-secret}

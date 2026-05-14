@@ -26,6 +26,9 @@ services:
       KC_DB_PASSWORD:          keycloak_password
       YANDEX_CLIENT_ID:        YOUR_YANDEX_CLIENT_ID
       YANDEX_CLIENT_SECRET:    YOUR_YANDEX_CLIENT_SECRET
+      KC_HOSTNAME_URL:         http://localhost:8080
+      KC_HOSTNAME_ADMIN_URL:   http://localhost:8080
+      KC_HOSTNAME_STRICT:      "false"
     command:
       - start-dev
       - --import-realm
@@ -61,6 +64,7 @@ services:
       - "8000:8000"
     environment:
       KEYCLOAK_URL:           http://keycloak:8080
+      KEYCLOAK_PUBLIC_URL:    http://localhost:8080
       KEYCLOAK_REALM:         reports-realm
       KEYCLOAK_CLIENT_ID:     bionicpro-auth-client
       KEYCLOAK_CLIENT_SECRET: bionicpro-auth-secret
@@ -128,7 +132,7 @@ services:
   airflow:
     image: apache/airflow:2.9.1-python3.11
     environment:
-      AIRFLOW__CORE__EXECUTOR:                    LocalExecutor
+      AIRFLOW__CORE__EXECUTOR:                    SequentialExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN:        sqlite:////opt/airflow/airflow.db
       AIRFLOW__CORE__LOAD_EXAMPLES:               "false"
       AIRFLOW__WEBSERVER__SECRET_KEY:             bionicpro-airflow-secret
@@ -168,26 +172,29 @@ services:
 
   # ── Apache Kafka (KRaft mode — no ZooKeeper) ──────────────────────────────────
   kafka:
-    image: bitnami/kafka:3.7
+    image: apache/kafka:3.8.1
     environment:
-      KAFKA_CFG_NODE_ID:                        0
-      KAFKA_CFG_PROCESS_ROLES:                  controller,broker
-      KAFKA_CFG_LISTENERS:                      PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      KAFKA_CFG_ADVERTISED_LISTENERS:           PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
-      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS:       0@kafka:9093
-      KAFKA_CFG_CONTROLLER_LISTENER_NAMES:      CONTROLLER
-      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE:      "true"
-      KAFKA_CFG_LOG_RETENTION_HOURS:            "168"     # 7 days
+      KAFKA_NODE_ID:                          1
+      KAFKA_PROCESS_ROLES:                    broker,controller
+      KAFKA_LISTENERS:                        PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS:             PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS:         1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME:       PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES:        CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:   CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE:        "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR:    1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID:                             "4L6g3nShT-eMCtK--X86sw"
     volumes:
-      - kafka-data:/bitnami/kafka
-    ports:
-      - "9094:9094"   # external access (optional)
+      - kafka-data:/tmp/kraft-combined-logs
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list 2>/dev/null || exit 1"]
       interval: 15s
-      timeout: 10s
-      retries: 5
+      timeout: 15s
+      retries: 10
 
   # ── Kafka Connect + Debezium PostgreSQL connector ─────────────────────────────
   kafka-connect:
@@ -233,9 +240,7 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:23.8
     environment:
-      CLICKHOUSE_DB:       bionicpro
-      CLICKHOUSE_USER:     default
-      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DB: bionicpro
     volumes:
       - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
       - clickhouse-data:/var/lib/clickhouse
@@ -247,7 +252,7 @@ services:
         soft: 262144
         hard: 262144
     healthcheck:
-      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1'"]
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -267,7 +272,7 @@ services:
       - "9000:9000"   # S3 API
       - "9001:9001"   # Web Console
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -275,6 +280,7 @@ services:
   # ── MinIO bucket bootstrap ────────────────────────────────────────────────────
   minio-init:
     image: minio/mc:latest
+    restart: "no"
     depends_on:
       minio:
         condition: service_healthy
@@ -326,7 +332,7 @@ services:
       minio:
         condition: service_healthy
       keycloak:
-        - service_started
+        condition: service_started
 
 volumes:
   crm-db-data:
